@@ -1,0 +1,17 @@
+@extends('layouts.portal')
+@section('title', 'Enter marks · New Cruse Academy')
+@section('content')
+<div class="portal-shell"><header class="portal-header"><a class="portal-brand" href="{{ route('dashboard') }}"><img src="{{ asset('images/school-logo.png') }}" alt="" class="header-logo"><span>New Cruse Academy</span></a><div class="account-actions"><span>{{ auth()->user()->name }} <small>Teacher</small></span><form method="post" action="{{ route('logout') }}">@csrf<button class="button button-light">Sign out</button></form></div></header>
+<main class="dashboard-main"><a class="action-link" href="{{ route('teacher.results.index') }}">← My marks</a><p class="eyebrow">{{ $submission->term->name }} · {{ $assignment->gradeLevel->name }}</p><h1>{{ $submission->subject->name }}</h1>
+@if(session('status'))<div class="status-note">{{ session('status') }}</div>@endif
+@if($latestReopen && $submission->status === 'reopened')<div class="setup-note"><strong>Correction requested by Super Admin</strong><span>{{ $latestReopen->reason }}</span></div>@endif
+@if($submission->status === 'returned')<div class="setup-note"><strong>Returned by Admin</strong><span>{{ $submission->review_note }}</span></div>@endif
+@if($locked)<div class="setup-note"><strong>{{ $submission->status === 'approved' ? 'Published and locked' : 'Submitted and locked' }}</strong><span>{{ $submission->status === 'approved' ? 'The approved result snapshot is visible to linked parents.' : 'Admin is reviewing this submission.' }}</span></div>@endif
+@if($errors->any())<div class="form-errors"><strong>Please correct these entries:</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+<form method="post" action="{{ route('teacher.results.save', [$assignment->id, $submission->term_id, $submission->subject_id]) }}">@csrf
+<div class="table-wrap"><table class="data-table marks-table"><thead><tr><th>Student</th><th>Code</th><th>Assignment 1 /10</th><th>Assignment 2 /10</th><th>Assignment 3 /10</th><th>Assignment 4 /10</th><th>Exam /60</th><th>Total /100</th><th>Comment</th></tr></thead><tbody>
+@foreach($roster as $student)@php($result = $results->get($student->id))<tr><td>{{ $student->person->first_name }} {{ $student->person->last_name }}</td><td>{{ $student->student_code }}</td>@foreach(['assignment_1','assignment_2','assignment_3','assignment_4','exam_score'] as $field)<td><input class="score-input" name="marks[{{ $student->id }}][{{ $field }}]" type="number" min="0" max="{{ $field === 'exam_score' ? '60' : '10' }}" step="0.01" value="{{ old("marks.{$student->id}.{$field}", $result?->{$field}) }}" @disabled($locked) aria-label="{{ str_replace('_',' ',ucfirst($field)) }} for {{ $student->student_code }}"></td>@endforeach<td>{{ $result?->total_score ?? 'N/A' }}</td><td><input name="comments[{{ $student->id }}]" maxlength="1000" value="{{ old("comments.{$student->id}", $result?->teacher_comment) }}" @disabled($locked) aria-label="Teacher comment for {{ $student->student_code }}"></td></tr>@endforeach
+</tbody></table></div>
+@if(!$locked)<div class="form-actions"><button class="button button-light" name="action" value="save" type="submit">Save draft</button><button class="button button-primary" name="action" value="submit" type="submit" onclick="return confirm('Submit these marks to Admin? You will not be able to edit them while they are under review.')">Submit to Admin</button></div>@endif
+</form></main></div>
+@endsection

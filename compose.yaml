@@ -1,0 +1,71 @@
+name: new-cruse-portal
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: new_cruse_portal
+      MARIADB_USER: portal_app
+      MARIADB_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    volumes:
+      - portal_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  bootstrap:
+    build: .
+    working_dir: /workspace
+    volumes:
+      - ./app:/workspace/app
+    command:
+      - sh
+      - -lc
+      - >-
+        if [ ! -f app/artisan ]; then composer create-project laravel/laravel app "^13.0" --no-interaction; fi;
+        if [ ! -f app/.env ]; then cp app/.env.example app/.env; fi;
+        if ! grep -q "^APP_KEY=base64:" app/.env; then cd app && php artisan key:generate; fi
+
+  assets:
+    image: node:24-alpine
+    working_dir: /app
+    volumes:
+      - ./app:/app
+      - node_modules:/app/node_modules
+    command:
+      - sh
+      - -lc
+      - if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+  app:
+    build: .
+    working_dir: /workspace/app
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:${APP_PORT:-8081}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: new_cruse_portal
+      DB_USERNAME: portal_app
+      DB_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
+    volumes:
+      - ./app:/workspace/app
+    ports:
+      - "127.0.0.1:${APP_PORT:-8081}:8000"
+    command: php artisan serve --host=0.0.0.0
+    depends_on:
+      db:
+        condition: service_healthy
+      assets:
+        condition: service_completed_successfully
+
+volumes:
+  portal_db:
+  node_modules:
